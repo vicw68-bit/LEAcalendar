@@ -2,7 +2,6 @@
 
 Calendrier partagé pour planifier l’utilisation du logiciel **LEA** : 2 licences flottantes + 1 PC LEA.
 
-Comme **Diable Noir** : un seul fichier `index.html`, Firebase Realtime Database, déploiement GitHub Pages en 2 clics.
 
 ## Jouer / utiliser en ligne
 
