@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Calendrier LEA — Réservation des licences</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.css" rel="stylesheet">
+  <style>
+    :root {
+      --license1: #8b5cf6;
+      --license2: #06b6d4;
+      --pc: #f59e0b;
+      --navy: #0f172a;
+      --slate: #1e293b;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: #f8fafc;
+      color: #0f172a;
+      min-height: 100vh;
+    }
+
+    .header {
+      background: linear-gradient(135deg, var(--navy) 0%, var(--slate) 50%, #1e3a8a 100%);
+      color: white;
+      padding: 28px 20px;
+    }
+
+    .header-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255,255,255,0.1);
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 500;
+      color: #bfdbfe;
+      margin-bottom: 12px;
+    }
+
+    .badge-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #34d399;
+    }
+
+    h1 {
+      font-size: clamp(1.5rem, 4vw, 2rem);
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .subtitle {
+      color: #cbd5e1;
+      font-size: 14px;
+      max-width: 640px;
+      line-height: 1.5;
+    }
+
+    .firebase-status {
+      margin-top: 16px;
+      padding: 12px 16px;
+      border-radius: 12px;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .firebase-status.loading { background: rgba(255,255,255,0.08); color: #e2e8f0; }
+    .firebase-status.ok { background: rgba(52,211,153,0.15); color: #a7f3d0; }
+    .firebase-status.error { background: rgba(248,113,113,0.15); color: #fecaca; }
+
+    .availability {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255,255,255,0.1);
+      padding: 8px 14px;
+      border-radius: 12px;
+      font-size: 12px;
+      backdrop-filter: blur(4px);
+    }
+
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+
+    .status-dot.free { background: #34d399; box-shadow: 0 0 8px rgba(52,211,153,0.8); }
+    .status-dot.busy { background: #f87171; }
+
+    .main {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px 20px 40px;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      align-items: center;
+      margin-bottom: 20px;
+      font-size: 14px;
+      color: #64748b;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .legend-color {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+
+    .legend-count { margin-left: auto; }
+
+    .calendar-wrap {
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+
+    #calendar { min-height: 640px; }
+
+    .info-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin-top: 28px;
+    }
+
+    .info-card {
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 16px;
+      padding: 20px;
+    }
+
+    .info-card h3 {
+      font-size: 15px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .info-bar {
+      width: 32px;
+      height: 8px;
+      border-radius: 999px;
+    }
+
+    .info-card p {
+      font-size: 13px;
+      color: #64748b;
+      line-height: 1.5;
+    }
+
+    footer {
+      text-align: center;
+      padding: 24px;
+      font-size: 12px;
+      color: #94a3b8;
+      border-top: 1px solid #e2e8f0;
+    }
+
+    /* FullCalendar overrides */
+    .fc { font-family: 'Inter', sans-serif; }
+    .fc .fc-toolbar-title { font-size: 1.2rem; font-weight: 600; }
+    .fc .fc-button {
+      background: var(--slate) !important;
+      border-color: #334155 !important;
+      border-radius: 8px !important;
+      font-weight: 500 !important;
+      text-transform: capitalize;
+    }
+    .fc .fc-button-active, .fc .fc-button:active {
+      background: #3b82f6 !important;
+      border-color: #3b82f6 !important;
+    }
+    .fc .fc-button:hover { background: #334155 !important; }
+    .fc-event { border: none !important; border-radius: 6px !important; font-size: 12px !important; cursor: pointer; }
+
+    /* Modal */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(15,23,42,0.5);
+      backdrop-filter: blur(4px);
+      z-index: 100;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+
+    .modal-backdrop.open { display: flex; }
+
+    .modal {
+      background: white;
+      border-radius: 20px;
+      padding: 24px;
+      width: 100%;
+      max-width: 440px;
+      box-shadow: 0 25px 50px rgba(0,0,0,0.2);
+      animation: fadeIn 0.2s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 20px;
+    }
+
+    .modal-header h2 { font-size: 18px; }
+    .modal-header p { font-size: 13px; color: #64748b; margin-top: 4px; }
+
+    .close-btn {
+      background: none;
+      border: none;
+      font-size: 22px;
+      color: #94a3b8;
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: 8px;
+    }
+
+    .close-btn:hover { background: #f1f5f9; color: #475569; }
+
+    .field { margin-bottom: 16px; }
+
+    .field label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: #334155;
+      margin-bottom: 6px;
+    }
+
+    .field input, .field select {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      font-size: 14px;
+      font-family: inherit;
+    }
+
+    .field input:focus, .field select:focus {
+      outline: none;
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
+    }
+
+    .field input:disabled { background: #f8fafc; }
+
+    .resource-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+
+    .resource-btn {
+      border: 2px solid #e2e8f0;
+      background: white;
+      border-radius: 12px;
+      padding: 10px 8px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: left;
+      transition: all 0.15s;
+    }
+
+    .resource-btn.active.license1 { border-color: var(--license1); background: #f5f3ff; color: #5b21b6; }
+    .resource-btn.active.license2 { border-color: var(--license2); background: #ecfeff; color: #0e7490; }
+    .resource-btn.active.pc { border-color: var(--pc); background: #fffbeb; color: #b45309; }
+
+    .time-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .error-box {
+      background: #fef2f2;
+      color: #b91c1c;
+      padding: 12px 14px;
+      border-radius: 12px;
+      font-size: 13px;
+      margin-bottom: 16px;
+      display: none;
+    }
+
+    .error-box.show { display: block; }
+
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 8px;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 11px 16px;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      font-family: inherit;
+    }
+
+    .btn-secondary {
+      background: white;
+      border: 1px solid #e2e8f0;
+      color: #475569;
+    }
+
+    .btn-primary { background: #2563eb; color: white; }
+    .btn-primary:hover { background: #1d4ed8; }
+    .btn-danger { background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; flex: 0; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    @media (max-width: 520px) {
+      .resource-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-inner">
+    <div class="badge"><span class="badge-dot"></span> Calendrier partagé LEA</div>
+    <h1>Réservation des licences</h1>
+    <p class="subtitle">
+      2 licences flottantes et 1 PC LEA. Cliquez-glissez sur le calendrier pour réserver.
+      Le PC n’est pas disponible si les 2 licences sont déjà prises en même temps.
+    </p>
+    <div id="firebaseStatus" class="firebase-status loading">Connexion à Firebase…</div>
+    <div class="availability" id="availabilityBar"></div>
+  </div>
+</header>
+
+<main class="main">
+  <div class="legend">
+    <div class="legend-item"><span class="legend-color" style="background:var(--license1)"></span> Licence flottante 1</div>
+    <div class="legend-item"><span class="legend-color" style="background:var(--license2)"></span> Licence flottante 2</div>
+    <div class="legend-item"><span class="legend-color" style="background:var(--pc)"></span> PC LEA</div>
+    <div class="legend-count" id="bookingCount">Chargement…</div>
+  </div>
+
+  <div class="calendar-wrap">
+    <div id="calendar"></div>
+  </div>
+
+  <div class="info-cards">
+    <div class="info-card">
+      <h3><span class="info-bar" style="background:var(--license1)"></span> Licences flottantes</h3>
+      <p>2 licences indépendantes. Une seule personne par licence et par créneau.</p>
+    </div>
+    <div class="info-card">
+      <h3><span class="info-bar" style="background:var(--pc)"></span> PC LEA</h3>
+      <p>Réservable uniquement si au moins une licence est libre sur le créneau choisi.</p>
+    </div>
+    <div class="info-card">
+      <h3><span class="info-bar" style="background:#3b82f6"></span> Comment réserver</h3>
+      <p>Sélectionnez un créneau, indiquez votre nom et la ressource. Cliquez une réservation pour la supprimer.</p>
+    </div>
+  </div>
+</main>
+
+<footer>Calendrier LEA — réservation collaborative</footer>
+
+<div class="modal-backdrop" id="modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <h2 id="modalTitle">Réserver LEA</h2>
+        <p id="modalSubtitle">Indiquez votre nom, la ressource et le créneau horaire.</p>
+      </div>
+      <button class="close-btn" id="closeModal" aria-label="Fermer">&times;</button>
+    </div>
+
+    <div class="error-box" id="modalError"></div>
+
+    <form id="bookingForm">
+      <div class="field">
+        <label for="name">Votre nom</label>
+        <input type="text" id="name" placeholder="Prénom Nom" required>
+      </div>
+
+      <div class="field">
+        <label>Ressource</label>
+        <div class="resource-grid" id="resourceGrid">
+          <button type="button" class="resource-btn license1 active" data-resource="license1">Licence flottante 1</button>
+          <button type="button" class="resource-btn license2" data-resource="license2">Licence flottante 2</button>
+          <button type="button" class="resource-btn pc" data-resource="pc">PC LEA</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="date">Date</label>
+        <input type="date" id="date" required>
+      </div>
+
+      <div class="time-row">
+        <div class="field">
+          <label for="startTime">De</label>
+          <input type="time" id="startTime" value="08:00" required>
+        </div>
+        <div class="field">
+          <label for="endTime">À</label>
+          <input type="time" id="endTime" value="12:00" required>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn btn-danger hidden" id="deleteBtn">Supprimer</button>
+        <button type="button" class="btn btn-secondary" id="cancelBtn">Annuler</button>
+        <button type="submit" class="btn btn-primary" id="submitBtn">Réserver</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+
+<script>
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyCZvbKfQ95NQ86piI3eIFr8Xc8orFOnfRQ",
+  authDomain: "leaplanning-ae6d7.firebaseapp.com",
+  databaseURL: "https://leaplanning-ae6d7-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "leaplanning-ae6d7",
+  storageBucket: "leaplanning-ae6d7.firebasestorage.app",
+  messagingSenderId: "670496687846",
+  appId: "1:670496687846:web:d855fa69ef415f96269d27",
+};
+
+const RESOURCE_LABELS = {
+  license1: "Licence flottante 1",
+  license2: "Licence flottante 2",
+  pc: "PC LEA",
+};
+
+const RESOURCE_COLORS = {
+  license1: { bg: "#8b5cf6", border: "#7c3aed", text: "#ffffff" },
+  license2: { bg: "#06b6d4", border: "#0891b2", text: "#ffffff" },
+  pc: { bg: "#f59e0b", border: "#d97706", text: "#1e293b" },
+};
+
+let db = null;
+let bookings = [];
+let calendar = null;
+let selectedResource = "license1";
+let viewBookingId = null;
+
+const modal = document.getElementById("modal");
+const modalError = document.getElementById("modalError");
+const bookingForm = document.getElementById("bookingForm");
+
+function setFirebaseStatus(type, html) {
+  const el = document.getElementById("firebaseStatus");
+  el.className = `firebase-status ${type}`;
+  el.innerHTML = html;
+}
+
+function formatFirebaseError(err) {
+  const code = err?.code || "";
+  const msg = err?.message || String(err);
+  if (code === "PERMISSION_DENIED") {
+    return `Accès refusé par Firebase.<br><br>
+      → Console Firebase → <strong>Realtime Database</strong> → <strong>Règles</strong><br>
+      → Collez ceci (format JSON, pas Firestore) :<br><br>
+      <code>{ "rules": { "bookings": { ".read": true, ".write": true } } }</code>`;
+  }
+  if (msg.includes("API key not valid") || msg.includes("INVALID_API_KEY")) {
+    return "Clé API refusée. Ajoutez votre domaine GitHub Pages dans Firebase → Paramètres → Domaines autorisés.";
+  }
+  return msg;
+}
+
+function initFirebase() {
+  try {
+    firebase.initializeApp(FIREBASE_CONFIG);
+    db = firebase.database();
+  } catch (err) {
+    setFirebaseStatus("error", formatFirebaseError(err));
+    return;
+  }
+
+  db.ref(".info/connected").on("value", (snap) => {
+    if (snap.val() === true) {
+      setFirebaseStatus("ok", "✅ Connecté — les réservations sont partagées en temps réel");
+    } else {
+      setFirebaseStatus("loading", "Connexion à Firebase…");
+    }
+  });
+
+  db.ref("bookings").on("value", (snap) => {
+    const data = snap.val() || {};
+    bookings = Object.entries(data).map(([id, b]) => ({
+      id,
+      name: b.name,
+      resource: b.resource,
+      start: new Date(b.start),
+      end: new Date(b.end),
+      createdAt: new Date(b.createdAt || Date.now()),
+    }));
+    updateUI();
+  }, (err) => {
+    setFirebaseStatus("error", formatFirebaseError(err));
+  });
+}
+
+function timesOverlap(aStart, aEnd, bStart, bEnd) {
+  return aStart < bEnd && bStart < aEnd;
+}
+
+function getBookingsForResource(resource) {
+  return bookings.filter((b) => b.resource === resource);
+}
+
+function isLicenseFullyBooked(start, end, excludeId) {
+  const active = bookings.filter((b) => b.id !== excludeId);
+  const l1 = getBookingsForResource("license1").some((b) => timesOverlap(b.start, b.end, start, end));
+  const l2 = getBookingsForResource("license2").some((b) => timesOverlap(b.start, b.end, start, end));
+  return l1 && l2;
+}
+
+function validateBooking(input, excludeId) {
+  const { name, resource, start, end } = input;
+  if (!name.trim()) return "Veuillez indiquer votre nom.";
+  if (end <= start) return "L'heure de fin doit être après l'heure de début.";
+
+  if (resource === "license1" || resource === "license2") {
+    const conflict = getBookingsForResource(resource)
+      .filter((b) => b.id !== excludeId)
+      .find((b) => timesOverlap(b.start, b.end, start, end));
+    if (conflict) return `Cette licence est déjà réservée par ${conflict.name} sur ce créneau.`;
+    return null;
+  }
+
+  if (isLicenseFullyBooked(start, end, excludeId)) {
+    return "Les 2 licences flottantes sont déjà utilisées sur ce créneau. Le PC LEA n'est pas disponible.";
+  }
+
+  const pcConflict = getBookingsForResource("pc")
+    .filter((b) => b.id !== excludeId)
+    .find((b) => timesOverlap(b.start, b.end, start, end));
+  if (pcConflict) return `Le PC LEA est déjà réservé par ${pcConflict.name} sur ce créneau.`;
+  return null;
+}
+
+function getAvailabilityAt(moment) {
+  const l1Busy = getBookingsForResource("license1").some((b) => b.start <= moment && moment < b.end);
+  const l2Busy = getBookingsForResource("license2").some((b) => b.start <= moment && moment < b.end);
+  const pcBusy = getBookingsForResource("pc").some((b) => b.start <= moment && moment < b.end);
+  return {
+    license1: !l1Busy,
+    license2: !l2Busy,
+    pc: !pcBusy && !(l1Busy && l2Busy),
+  };
+}
+
+function renderAvailability() {
+  const now = new Date();
+  const s = getAvailabilityAt(now);
+  const items = [
+    { key: "license1", label: "Licence 1", color: "var(--license1)", free: s.license1 },
+    { key: "license2", label: "Licence 2", color: "var(--license2)", free: s.license2 },
+    { key: "pc", label: "PC LEA", color: "var(--pc)", free: s.pc },
+  ];
+
+  document.getElementById("availabilityBar").innerHTML = items.map((i) => `
+    <div class="status-pill">
+      <span class="status-dot ${i.free ? "free" : "busy"}"></span>
+      <span style="color:${i.color}">●</span>
+      ${i.label}
+      <span style="color:${i.free ? "#6ee7b7" : "#fca5a5"}">${i.free ? "Libre" : "Occupé"}</span>
+    </div>
+  `).join("") + `<div class="status-pill" style="margin-left:auto">Maintenant — ${now.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</div>`;
+}
+
+function toTimeValue(date) {
+  return date.toTimeString().slice(0, 5);
+}
+
+function setTimeOnDate(dateStr, time) {
+  const [h, m] = time.split(":").map(Number);
+  const d = new Date(dateStr);
+  d.setHours(h, m, 0, 0);
+  return d;
+}
+
+function showError(msg) {
+  modalError.textContent = msg;
+  modalError.classList.add("show");
+}
+
+function hideError() {
+  modalError.classList.remove("show");
+}
+
+function openModal({ start, end, booking }) {
+  viewBookingId = booking?.id || null;
+  const isView = Boolean(booking);
+
+  document.getElementById("modalTitle").textContent = isView ? "Détail de la réservation" : "Réserver LEA";
+  document.getElementById("modalSubtitle").textContent = isView
+    ? "Consultez ou supprimez cette réservation."
+    : "Indiquez votre nom, la ressource et le créneau horaire.";
+
+  const s = booking?.start || start;
+  const e = booking?.end || end;
+
+  document.getElementById("name").value = booking?.name || "";
+  document.getElementById("name").disabled = isView;
+  document.getElementById("date").value = s.toISOString().slice(0, 10);
+  document.getElementById("date").disabled = isView;
+  document.getElementById("startTime").value = toTimeValue(s);
+  document.getElementById("startTime").disabled = isView;
+  document.getElementById("endTime").value = toTimeValue(e);
+  document.getElementById("endTime").disabled = isView;
+
+  selectedResource = booking?.resource || "license1";
+  document.querySelectorAll(".resource-btn").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.resource === selectedResource);
+    btn.disabled = isView;
+  });
+
+  document.getElementById("deleteBtn").classList.toggle("hidden", !isView);
+  document.getElementById("submitBtn").classList.toggle("hidden", isView);
+  document.getElementById("cancelBtn").textContent = isView ? "Fermer" : "Annuler";
+  hideError();
+  modal.classList.add("open");
+}
+
+function closeModal() {
+  modal.classList.remove("open");
+  viewBookingId = null;
+}
+
+function updateUI() {
+  renderAvailability();
+  document.getElementById("bookingCount").textContent =
+    `${bookings.length} réservation${bookings.length !== 1 ? "s" : ""}`;
+
+  if (!calendar) return;
+
+  calendar.removeAllEvents();
+  bookings.forEach((b) => {
+    const colors = RESOURCE_COLORS[b.resource];
+    calendar.addEvent({
+      id: b.id,
+      title: `${b.name} — ${RESOURCE_LABELS[b.resource]}`,
+      start: b.start,
+      end: b.end,
+      backgroundColor: colors.bg,
+      borderColor: colors.border,
+      textColor: colors.text,
+      extendedProps: { booking: b },
+    });
+  });
+}
+
+function initCalendar() {
+  const el = document.getElementById("calendar");
+  calendar = new FullCalendar.Calendar(el, {
+    initialView: "timeGridWeek",
+    locale: "fr",
+    firstDay: 1,
+    headerToolbar: {
+      left: "prev,next today",
+      center: "title",
+      right: "dayGridMonth,timeGridWeek,timeGridDay",
+    },
+    buttonText: {
+      today: "Aujourd'hui",
+      month: "Mois",
+      week: "Semaine",
+      day: "Jour",
+    },
+    slotMinTime: "06:00:00",
+    slotMaxTime: "22:00:00",
+    allDaySlot: false,
+    selectable: true,
+    selectMirror: true,
+    height: "auto",
+    contentHeight: 640,
+    slotLabelFormat: { hour: "2-digit", minute: "2-digit", hour12: false },
+    eventTimeFormat: { hour: "2-digit", minute: "2-digit", hour12: false },
+    select(info) {
+      if (!db) {
+        alert("Firebase non connecté. Vérifiez les règles Realtime Database.");
+        return;
+      }
+      openModal({ start: info.start, end: info.end });
+      calendar.unselect();
+    },
+    eventClick(info) {
+      openModal({ booking: info.event.extendedProps.booking });
+    },
+  });
+  calendar.render();
+}
+
+document.getElementById("resourceGrid").addEventListener("click", (e) => {
+  const btn = e.target.closest(".resource-btn");
+  if (!btn || btn.disabled) return;
+  selectedResource = btn.dataset.resource;
+  document.querySelectorAll(".resource-btn").forEach((b) => b.classList.toggle("active", b === btn));
+});
+
+document.getElementById("closeModal").onclick = closeModal;
+document.getElementById("cancelBtn").onclick = closeModal;
+modal.addEventListener("click", (e) => { if (e.target === modal) closeModal(); });
+
+document.getElementById("deleteBtn").onclick = async () => {
+  if (!viewBookingId || !db) return;
+  const b = bookings.find((x) => x.id === viewBookingId);
+  if (!confirm(`Supprimer la réservation de ${b?.name || "?"} ?`)) return;
+  try {
+    await db.ref(`bookings/${viewBookingId}`).remove();
+    closeModal();
+  } catch (err) {
+    showError(formatFirebaseError(err).replace(/<br>/g, " "));
+  }
+};
+
+bookingForm.onsubmit = async (e) => {
+  e.preventDefault();
+  if (viewBookingId || !db) return;
+
+  const name = document.getElementById("name").value;
+  const date = document.getElementById("date").value;
+  const start = setTimeOnDate(date, document.getElementById("startTime").value);
+  const end = setTimeOnDate(date, document.getElementById("endTime").value);
+
+  const input = { name, resource: selectedResource, start, end };
+  const error = validateBooking(input);
+  if (error) {
+    showError(error);
+    return;
+  }
+
+  try {
+    await db.ref("bookings").push({
+      name: name.trim(),
+      resource: selectedResource,
+      start: start.toISOString(),
+      end: end.toISOString(),
+      createdAt: Date.now(),
+    });
+    closeModal();
+    bookingForm.reset();
+  } catch (err) {
+    showError(formatFirebaseError(err).replace(/<br>/g, " "));
+  }
+};
+
+initFirebase();
+initCalendar();
+setInterval(renderAvailability, 60000);
+</script>
+</body>
+</html>
