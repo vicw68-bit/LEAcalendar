@@ -287,6 +287,14 @@
 
     .field input:disabled { background: #f8fafc; }
 
+    .field-hint {
+      margin-top: 6px;
+      font-size: 12px;
+      color: #64748b;
+    }
+
+    .field-hint.valid { color: #059669; }
+
     .resource-grid {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
@@ -367,7 +375,7 @@
     <div class="badge"><span class="badge-dot"></span> Calendrier partagé LEA</div>
     <h1>Réservation des licences</h1>
     <p class="subtitle">
-      2 licences flottantes et 1 PC LEA. Cliquez-glissez sur le calendrier pour réserver.
+      Réservé aux collaborateurs Ingerop (@ingerop.com). Cliquez-glissez sur le calendrier pour réserver.
       Le PC n’est pas disponible si les 2 licences sont déjà prises en même temps.
     </p>
     <div id="firebaseStatus" class="firebase-status loading">Connexion à Firebase…</div>
@@ -398,7 +406,7 @@
     </div>
     <div class="info-card">
       <h3><span class="info-bar" style="background:#3b82f6"></span> Comment réserver</h3>
-      <p>Sélectionnez un créneau, indiquez votre nom et la ressource. Cliquez une réservation pour la supprimer.</p>
+      <p>Sélectionnez un créneau, indiquez votre e-mail @ingerop.com et la ressource. Cliquez une réservation pour la supprimer.</p>
     </div>
   </div>
 </main>
@@ -419,8 +427,9 @@
 
     <form id="bookingForm">
       <div class="field">
-        <label for="name">Votre nom</label>
-        <input type="text" id="name" placeholder="Prénom Nom" required>
+        <label for="email">Votre e-mail Ingerop</label>
+        <input type="email" id="email" placeholder="prenom.nom@ingerop.com" required autocomplete="email">
+        <p id="emailPreview" class="field-hint hidden"></p>
       </div>
 
       <div class="field">
@@ -484,11 +493,15 @@ const RESOURCE_COLORS = {
   pc: { bg: "#f59e0b", border: "#d97706", text: "#1e293b" },
 };
 
+const RETENTION_MS = 14 * 24 * 60 * 60 * 1000; // 2 semaines
+const INGEROP_DOMAIN = "@ingerop.com";
+
 let db = null;
 let bookings = [];
 let calendar = null;
 let selectedResource = "license1";
 let viewBookingId = null;
+let purgeInProgress = false;
 
 const modal = document.getElementById("modal");
 const modalError = document.getElementById("modalError");
@@ -498,6 +511,55 @@ function setFirebaseStatus(type, html) {
   const el = document.getElementById("firebaseStatus");
   el.className = `firebase-status ${type}`;
   el.innerHTML = html;
+}
+
+function capitalizeWord(str) {
+  if (!str) return "";
+  return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+}
+
+function normalizeEmail(email) {
+  return email.trim().toLowerCase();
+}
+
+function emailToDisplayName(email) {
+  const normalized = normalizeEmail(email);
+  const local = normalized.split("@")[0];
+  const dot = local.indexOf(".");
+  if (dot === -1) return capitalizeWord(local);
+  const prenom = local.slice(0, dot);
+  const nom = local.slice(dot + 1);
+  return `${capitalizeWord(prenom)} ${capitalizeWord(nom)}`;
+}
+
+function validateIngeropEmail(email) {
+  const normalized = normalizeEmail(email);
+  if (!normalized) return "Veuillez indiquer votre adresse e-mail.";
+  if (!normalized.endsWith(INGEROP_DOMAIN)) {
+    return "Seules les adresses @ingerop.com peuvent réserver un créneau.";
+  }
+  const local = normalized.slice(0, -INGEROP_DOMAIN.length);
+  const parts = local.split(".");
+  if (parts.length !== 2 || !parts[0] || !parts[1]) {
+    return "Format attendu : prenom.nom@ingerop.com";
+  }
+  return null;
+}
+
+function parseBooking(id, b) {
+  const email = b.email ? normalizeEmail(b.email) : null;
+  const displayName = email
+    ? emailToDisplayName(email)
+    : (b.name || "Inconnu");
+  return {
+    id,
+    email,
+    displayName,
+    resource: b.resource,
+    start: new Date(b.start),
+    end: new Date(b.end),
+    createdAt: new Date(b.createdAt || Date.now()),
+  };
 }
 
 function formatFirebaseError(err) {
@@ -534,18 +596,32 @@ function initFirebase() {
 
   db.ref("bookings").on("value", (snap) => {
     const data = snap.val() || {};
-    bookings = Object.entries(data).map(([id, b]) => ({
-      id,
-      name: b.name,
-      resource: b.resource,
-      start: new Date(b.start),
-      end: new Date(b.end),
-      createdAt: new Date(b.createdAt || Date.now()),
-    }));
+    const allBookings = Object.entries(data).map(([id, b]) => parseBooking(id, b));
+
+    purgeOldBookings(allBookings);
+
+    const cutoff = Date.now() - RETENTION_MS;
+    bookings = allBookings.filter((b) => b.end.getTime() >= cutoff);
     updateUI();
   }, (err) => {
     setFirebaseStatus("error", formatFirebaseError(err));
   });
+}
+
+function purgeOldBookings(list) {
+  if (!db || purgeInProgress) return;
+
+  const cutoff = Date.now() - RETENTION_MS;
+  const expired = list.filter((b) => b.end.getTime() < cutoff);
+  if (!expired.length) return;
+
+  purgeInProgress = true;
+  const updates = {};
+  expired.forEach((b) => { updates[`bookings/${b.id}`] = null; });
+
+  db.ref().update(updates)
+    .catch((err) => console.warn("Nettoyage automatique:", err))
+    .finally(() => { purgeInProgress = false; });
 }
 
 function timesOverlap(aStart, aEnd, bStart, bEnd) {
@@ -564,15 +640,16 @@ function isLicenseFullyBooked(start, end, excludeId) {
 }
 
 function validateBooking(input, excludeId) {
-  const { name, resource, start, end } = input;
-  if (!name.trim()) return "Veuillez indiquer votre nom.";
+  const { email, resource, start, end } = input;
+  const emailError = validateIngeropEmail(email);
+  if (emailError) return emailError;
   if (end <= start) return "L'heure de fin doit être après l'heure de début.";
 
   if (resource === "license1" || resource === "license2") {
     const conflict = getBookingsForResource(resource)
       .filter((b) => b.id !== excludeId)
       .find((b) => timesOverlap(b.start, b.end, start, end));
-    if (conflict) return `Cette licence est déjà réservée par ${conflict.name} sur ce créneau.`;
+    if (conflict) return `Cette licence est déjà réservée par ${conflict.displayName} sur ce créneau.`;
     return null;
   }
 
@@ -583,7 +660,7 @@ function validateBooking(input, excludeId) {
   const pcConflict = getBookingsForResource("pc")
     .filter((b) => b.id !== excludeId)
     .find((b) => timesOverlap(b.start, b.end, start, end));
-  if (pcConflict) return `Le PC LEA est déjà réservé par ${pcConflict.name} sur ce créneau.`;
+  if (pcConflict) return `Le PC LEA est déjà réservé par ${pcConflict.displayName} sur ce créneau.`;
   return null;
 }
 
@@ -644,13 +721,25 @@ function openModal({ start, end, booking }) {
   document.getElementById("modalTitle").textContent = isView ? "Détail de la réservation" : "Réserver LEA";
   document.getElementById("modalSubtitle").textContent = isView
     ? "Consultez ou supprimez cette réservation."
-    : "Indiquez votre nom, la ressource et le créneau horaire.";
+    : "Indiquez votre e-mail @ingerop.com, la ressource et le créneau horaire.";
 
   const s = booking?.start || start;
   const e = booking?.end || end;
 
-  document.getElementById("name").value = booking?.name || "";
-  document.getElementById("name").disabled = isView;
+  const emailInput = document.getElementById("email");
+  const emailPreview = document.getElementById("emailPreview");
+  emailInput.value = booking?.email || "";
+  emailInput.disabled = isView;
+  emailInput.type = isView ? "text" : "email";
+
+  if (isView && booking) {
+    emailPreview.textContent = `Affiché sur le calendrier : ${booking.displayName}`;
+    emailPreview.classList.remove("hidden", "valid");
+  } else {
+    emailPreview.classList.add("hidden");
+    emailPreview.classList.remove("valid");
+    emailPreview.textContent = "";
+  }
   document.getElementById("date").value = s.toISOString().slice(0, 10);
   document.getElementById("date").disabled = isView;
   document.getElementById("startTime").value = toTimeValue(s);
@@ -688,7 +777,7 @@ function updateUI() {
     const colors = RESOURCE_COLORS[b.resource];
     calendar.addEvent({
       id: b.id,
-      title: `${b.name} — ${RESOURCE_LABELS[b.resource]}`,
+      title: `${b.displayName} — ${RESOURCE_LABELS[b.resource]}`,
       start: b.start,
       end: b.end,
       backgroundColor: colors.bg,
@@ -754,7 +843,7 @@ modal.addEventListener("click", (e) => { if (e.target === modal) closeModal(); }
 document.getElementById("deleteBtn").onclick = async () => {
   if (!viewBookingId || !db) return;
   const b = bookings.find((x) => x.id === viewBookingId);
-  if (!confirm(`Supprimer la réservation de ${b?.name || "?"} ?`)) return;
+  if (!confirm(`Supprimer la réservation de ${b?.displayName || "?"} ?`)) return;
   try {
     await db.ref(`bookings/${viewBookingId}`).remove();
     closeModal();
@@ -767,12 +856,12 @@ bookingForm.onsubmit = async (e) => {
   e.preventDefault();
   if (viewBookingId || !db) return;
 
-  const name = document.getElementById("name").value;
+  const email = document.getElementById("email").value;
   const date = document.getElementById("date").value;
   const start = setTimeOnDate(date, document.getElementById("startTime").value);
   const end = setTimeOnDate(date, document.getElementById("endTime").value);
 
-  const input = { name, resource: selectedResource, start, end };
+  const input = { email, resource: selectedResource, start, end };
   const error = validateBooking(input);
   if (error) {
     showError(error);
@@ -781,7 +870,7 @@ bookingForm.onsubmit = async (e) => {
 
   try {
     await db.ref("bookings").push({
-      name: name.trim(),
+      email: normalizeEmail(email),
       resource: selectedResource,
       start: start.toISOString(),
       end: end.toISOString(),
@@ -793,6 +882,23 @@ bookingForm.onsubmit = async (e) => {
     showError(formatFirebaseError(err).replace(/<br>/g, " "));
   }
 };
+
+document.getElementById("email").addEventListener("input", (e) => {
+  const preview = document.getElementById("emailPreview");
+  const err = validateIngeropEmail(e.target.value);
+  if (!e.target.value.trim()) {
+    preview.classList.add("hidden");
+    return;
+  }
+  preview.classList.remove("hidden");
+  if (err) {
+    preview.textContent = err;
+    preview.classList.remove("valid");
+  } else {
+    preview.textContent = `Affiché : ${emailToDisplayName(e.target.value)}`;
+    preview.classList.add("valid");
+  }
+});
 
 initFirebase();
 initCalendar();
