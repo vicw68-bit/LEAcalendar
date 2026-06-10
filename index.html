@@ -293,7 +293,7 @@
       color: #64748b;
     }
 
-    .field-hint.valid { color: #059669; }
+    .field-hint.error { color: #dc2626; }
 
     .resource-grid {
       display: grid;
@@ -375,7 +375,7 @@
     <div class="badge"><span class="badge-dot"></span> Calendrier partagé LEA</div>
     <h1>Réservation des licences</h1>
     <p class="subtitle">
-      Réservé aux collaborateurs Ingerop (@ingerop.com). Cliquez-glissez sur le calendrier pour réserver.
+      Cliquez-glissez sur le calendrier pour réserver un créneau.
       Le PC n’est pas disponible si les 2 licences sont déjà prises en même temps.
     </p>
     <div id="firebaseStatus" class="firebase-status loading">Connexion à Firebase…</div>
@@ -406,7 +406,7 @@
     </div>
     <div class="info-card">
       <h3><span class="info-bar" style="background:#3b82f6"></span> Comment réserver</h3>
-      <p>Sélectionnez un créneau, indiquez votre e-mail @ingerop.com et la ressource. Cliquez une réservation pour la supprimer.</p>
+      <p>Sélectionnez un créneau, indiquez votre adresse mail et la ressource. Cliquez une réservation pour la supprimer.</p>
     </div>
   </div>
 </main>
@@ -418,7 +418,7 @@
     <div class="modal-header">
       <div>
         <h2 id="modalTitle">Réserver LEA</h2>
-        <p id="modalSubtitle">Indiquez votre nom, la ressource et le créneau horaire.</p>
+        <p id="modalSubtitle">Indiquez votre adresse mail, la ressource et le créneau horaire.</p>
       </div>
       <button class="close-btn" id="closeModal" aria-label="Fermer">&times;</button>
     </div>
@@ -427,8 +427,8 @@
 
     <form id="bookingForm">
       <div class="field">
-        <label for="email">Votre e-mail Ingerop</label>
-        <input type="email" id="email" placeholder="prenom.nom@ingerop.com" required autocomplete="email">
+        <label for="email">Adresse mail</label>
+        <input type="email" id="email" placeholder="adresse mail" required autocomplete="email">
         <p id="emailPreview" class="field-hint hidden"></p>
       </div>
 
@@ -532,17 +532,15 @@ function emailToDisplayName(email) {
   return `${capitalizeWord(prenom)} ${capitalizeWord(nom)}`;
 }
 
+const FORBIDDEN_MSG = "interdit d'utilisation";
+
 function validateIngeropEmail(email) {
   const normalized = normalizeEmail(email);
-  if (!normalized) return "Veuillez indiquer votre adresse e-mail.";
-  if (!normalized.endsWith(INGEROP_DOMAIN)) {
-    return "Seules les adresses @ingerop.com peuvent réserver un créneau.";
-  }
+  if (!normalized) return FORBIDDEN_MSG;
+  if (!normalized.endsWith(INGEROP_DOMAIN)) return FORBIDDEN_MSG;
   const local = normalized.slice(0, -INGEROP_DOMAIN.length);
   const parts = local.split(".");
-  if (parts.length !== 2 || !parts[0] || !parts[1]) {
-    return "Format attendu : prenom.nom@ingerop.com";
-  }
+  if (parts.length !== 2 || !parts[0] || !parts[1]) return FORBIDDEN_MSG;
   return null;
 }
 
@@ -721,7 +719,7 @@ function openModal({ start, end, booking }) {
   document.getElementById("modalTitle").textContent = isView ? "Détail de la réservation" : "Réserver LEA";
   document.getElementById("modalSubtitle").textContent = isView
     ? "Consultez ou supprimez cette réservation."
-    : "Indiquez votre e-mail @ingerop.com, la ressource et le créneau horaire.";
+    : "Indiquez votre adresse mail, la ressource et le créneau horaire.";
 
   const s = booking?.start || start;
   const e = booking?.end || end;
@@ -732,14 +730,9 @@ function openModal({ start, end, booking }) {
   emailInput.disabled = isView;
   emailInput.type = isView ? "text" : "email";
 
-  if (isView && booking) {
-    emailPreview.textContent = `Affiché sur le calendrier : ${booking.displayName}`;
-    emailPreview.classList.remove("hidden", "valid");
-  } else {
-    emailPreview.classList.add("hidden");
-    emailPreview.classList.remove("valid");
-    emailPreview.textContent = "";
-  }
+  emailPreview.classList.add("hidden");
+  emailPreview.classList.remove("error");
+  emailPreview.textContent = "";
   document.getElementById("date").value = s.toISOString().slice(0, 10);
   document.getElementById("date").disabled = isView;
   document.getElementById("startTime").value = toTimeValue(s);
@@ -885,18 +878,19 @@ bookingForm.onsubmit = async (e) => {
 
 document.getElementById("email").addEventListener("input", (e) => {
   const preview = document.getElementById("emailPreview");
-  const err = validateIngeropEmail(e.target.value);
-  if (!e.target.value.trim()) {
+  const value = e.target.value.trim();
+  if (!value) {
     preview.classList.add("hidden");
     return;
   }
-  preview.classList.remove("hidden");
+  const err = validateIngeropEmail(value);
   if (err) {
-    preview.textContent = err;
-    preview.classList.remove("valid");
+    preview.textContent = FORBIDDEN_MSG;
+    preview.classList.remove("hidden");
+    preview.classList.add("error");
   } else {
-    preview.textContent = `Affiché : ${emailToDisplayName(e.target.value)}`;
-    preview.classList.add("valid");
+    preview.classList.add("hidden");
+    preview.classList.remove("error");
   }
 });
 
