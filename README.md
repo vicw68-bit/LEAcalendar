@@ -7,7 +7,7 @@ Calendrier partagé pour planifier l’utilisation du logiciel **LEA** : 2 licen
 
 Après déploiement, le lien sera :
 
-**https://VOTRE_USER.github.io/NOM_DU_REPO/**
+(https://vicw68-bit.github.io/LEAcalendar/)
 
 ## Mettre sur GitHub
 
