@@ -463,6 +463,31 @@ async function logAnalyticsEvent(event) {
   await db.ref("analytics/events").push(event);
 }
 
+async function removeAnalyticsForBooking(bookingId, booking) {
+  if (!db) return;
+  const updates = {};
+
+  analyticsEvents.forEach((e) => {
+    if (e.type !== "booking") return;
+    if (e.bookingId === bookingId) {
+      updates[`analytics/events/${e.id}`] = null;
+      return;
+    }
+    if (booking && e.start && e.end) {
+      const match =
+        e.start.getTime() === booking.start.getTime() &&
+        e.end.getTime() === booking.end.getTime() &&
+        e.email === booking.email &&
+        e.resource === booking.resource;
+      if (match) updates[`analytics/events/${e.id}`] = null;
+    }
+  });
+
+  if (Object.keys(updates).length) {
+    await db.ref().update(updates);
+  }
+}
+
 async function purgeOldBookings(list) {
   if (!db || purgeInProgress) return;
   const cutoff = Date.now() - RETENTION_MS;
@@ -940,6 +965,7 @@ document.getElementById("deleteBtn").onclick = async () => {
   const b = bookings.find((x) => x.id === viewBookingId);
   if (!confirm(`Supprimer la réservation de ${b?.displayName || "?"} ?`)) return;
   try {
+    await removeAnalyticsForBooking(viewBookingId, b);
     await db.ref(`bookings/${viewBookingId}`).remove();
     closeModal();
   } catch (err) {
