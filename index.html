@@ -28,6 +28,7 @@
       cursor: pointer; font-family: inherit; transition: background 0.15s;
     }
     .header-btn:hover { background: rgba(255,255,255,0.18); }
+    a.header-btn { text-decoration: none; display: inline-flex; align-items: center; }
     .header-btn.active { background: #2563eb; border-color: #2563eb; }
     .header-btn.alert-btn { background: rgba(239,68,68,0.2); border-color: rgba(248,113,113,0.4); }
     .header-btn.alert-btn:hover { background: rgba(239,68,68,0.35); }
@@ -148,6 +149,7 @@
         <button type="button" class="header-btn" id="navStats" data-view="stats">📊 Statistiques</button>
         <button type="button" class="header-btn" id="navLicenses">⚙️ Licences</button>
         <button type="button" class="header-btn alert-btn" id="shortageBtn">🚨 Besoin d'une licence</button>
+        <a class="header-btn" id="downloadApp" href="https://github.com/vicw68-bit/LEAcalendar/releases/latest/download/Calendrier-LEA.exe">⬇ Télécharger</a>
       </div>
     </div>
     <div id="firebaseStatus" class="firebase-status loading">Connexion à Firebase…</div>
@@ -1084,6 +1086,11 @@ selectedResource = DEFAULT_RESOURCES[0].id;
 initFirebase();
 initCalendar();
 setInterval(renderAvailability, 60000);
+
+if (navigator.userAgent.includes("Electron")) {
+  const downloadLink = document.getElementById("downloadApp");
+  if (downloadLink) downloadLink.remove();
+}
 </script>
 </body>
 </html>

@@ -1,0 +1,39 @@
+{
+  "name": "calendrier-lea",
+  "version": "1.0.0",
+  "description": "Réservation partagée des licences LEA. Même interface sur chaque poste, données synchronisées.",
+  "main": "main.js",
+  "author": "INGEROP",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win portable"
+  },
+  "build": {
+    "appId": "fr.ingerop.calendrier-lea",
+    "productName": "Calendrier LEA",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "index.html",
+      "main.js",
+      "package.json"
+    ],
+    "win": {
+      "target": "portable",
+      "signAndEditExecutable": false,
+      "artifactName": "Calendrier-LEA.exe"
+    },
+    "portable": {
+      "artifactName": "Calendrier-LEA.exe"
+    }
+  },
+  "devDependencies": {
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8"
+  },
+  "allowScripts": {
+    "electron@33.4.11": true
+  }
+}
